@@ -1,0 +1,9 @@
+[package]
+name = "strongarm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.193", features = ["derive"] }
+substrate = { version = "0.8.1", registry = "substrate", path = "../substrate2/substrate" }
+sky130pdk = { version = "0.8.1", registry = "substrate", path = "../substrate2/pdks/sky130pdk" }
