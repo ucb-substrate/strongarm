@@ -2433,8 +2433,11 @@ dependencies = [
 name = "strongarm"
 version = "0.1.0"
 dependencies = [
+ "rust_decimal",
+ "rust_decimal_macros",
  "serde",
  "sky130pdk",
+ "spectre",
  "substrate",
 ]
 
