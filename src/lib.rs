@@ -5,10 +5,11 @@ use sky130pdk::corner::Sky130Corner;
 use sky130pdk::mos::MosParams;
 use sky130pdk::mos::{Nfet01v8, Pfet01v8};
 use sky130pdk::Sky130Pdk;
-use spectre::blocks::Vsource;
+use spectre::blocks::{Pulse, Vsource};
 use spectre::tran::Tran;
 use spectre::Spectre;
 use substrate::block::Block;
+use substrate::context::{Context, PdkContext};
 use substrate::io::TestbenchIo;
 use substrate::io::{
     DiffPair, DiffPairSchematic, InOut, Input, Io, MosIoSchematic, Node, Output, SchematicType,
@@ -192,7 +193,15 @@ impl Schematic<Spectre> for StrongArmTranTb {
         let vinp = cell.instantiate(Vsource::dc(self.vinp));
         let vinn = cell.instantiate(Vsource::dc(self.vinn));
         let vdd = cell.instantiate(Vsource::dc(self.pvt.voltage));
-        let vclk = cell.instantiate(Vsource::dc(self.pvt.voltage));
+        let vclk = cell.instantiate(Vsource::pulse(Pulse {
+            val0: dec!(0),
+            val1: self.pvt.voltage,
+            period: Some(dec!(1000)),
+            width: Some(dec!(100)),
+            delay: Some(dec!(10e-9)),
+            rise: Some(dec!(100e-12)),
+            fall: Some(dec!(100e-12)),
+        }));
 
         cell.connect(io.vss, vinp.io().n);
         cell.connect(io.vss, vinn.io().n);
@@ -269,5 +278,65 @@ impl Testbench<Spectre> for StrongArmTranTb {
             },
         )
         .expect("failed to run simulation")
+    }
+}
+
+pub fn sky130_ctx() -> PdkContext<Sky130Pdk> {
+    let pdk_root = std::env::var("SKY130_COMMERCIAL_PDK_ROOT")
+        .expect("the SKY130_COMMERCIAL_PDK_ROOT environment variable must be set");
+    Context::builder()
+        .install(Spectre::default())
+        .install(Sky130Pdk::commercial(pdk_root))
+        .build()
+        .with_pdk()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sim_strongarm() {
+        let work_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sim_strongarm");
+        let tb = StrongArmTranTb {
+            dut: StrongArmInstance {
+                tail: MosParams {
+                    w: 5_000,
+                    l: 150,
+                    nf: 1,
+                },
+                input_pair: MosParams {
+                    w: 8_000,
+                    l: 150,
+                    nf: 1,
+                },
+                inv_nmos: MosParams {
+                    w: 4_000,
+                    l: 150,
+                    nf: 1,
+                },
+                inv_pmos: MosParams {
+                    w: 2_000,
+                    l: 150,
+                    nf: 1,
+                },
+                precharge: MosParams {
+                    w: 2_000,
+                    l: 150,
+                    nf: 1,
+                },
+            },
+            vinp: dec!(0.8),
+            vinn: dec!(0.6),
+            pvt: Pvt {
+                corner: Sky130Corner::Tt,
+                voltage: dec!(1.8),
+                temp: dec!(25.0),
+            },
+        };
+        let ctx = sky130_ctx();
+        let waveforms = ctx
+            .simulate(tb, work_dir)
+            .expect("failed to run simulation");
     }
 }
