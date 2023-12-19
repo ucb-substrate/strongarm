@@ -1,3 +1,5 @@
+use approx::abs_diff_eq;
+use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
@@ -7,7 +9,7 @@ use sky130pdk::mos::{Nfet01v8, Pfet01v8};
 use sky130pdk::Sky130Pdk;
 use spectre::blocks::{Pulse, Vsource};
 use spectre::tran::Tran;
-use spectre::Spectre;
+use spectre::{ErrPreset, Spectre};
 use substrate::block::Block;
 use substrate::context::{Context, PdkContext};
 use substrate::io::TestbenchIo;
@@ -246,6 +248,19 @@ pub struct ComparatorSim {
     clk: tran::Voltage,
 }
 
+/// The decision made by a comparator.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub enum ComparatorDecision {
+    /// Negative.
+    ///
+    /// The negative input was larger than the positive input.
+    Neg,
+    /// Positive.
+    ///
+    /// The positive input was larger than the negative input.
+    Pos,
+}
+
 impl SaveTb<Spectre, Tran, ComparatorSim> for StrongArmTranTb {
     fn save_tb(
         ctx: &SimulationContext<Spectre>,
@@ -264,20 +279,33 @@ impl SaveTb<Spectre, Tran, ComparatorSim> for StrongArmTranTb {
 }
 
 impl Testbench<Spectre> for StrongArmTranTb {
-    type Output = ComparatorSim;
+    type Output = Option<ComparatorDecision>;
 
     fn run(&self, sim: SimController<Spectre, Self>) -> Self::Output {
         let mut opts = spectre::Options::default();
         sim.set_option(self.pvt.corner, &mut opts);
-        sim.simulate(
-            opts,
-            Tran {
-                stop: dec!(2e-9),
-                start: None,
-                errpreset: None,
-            },
-        )
-        .expect("failed to run simulation")
+        let wav: ComparatorSim = sim
+            .simulate(
+                opts,
+                Tran {
+                    stop: dec!(20e-9),
+                    start: None,
+                    errpreset: Some(ErrPreset::Conservative),
+                },
+            )
+            .expect("failed to run simulation");
+
+        let von = *wav.von.last().unwrap();
+        let vop = *wav.vop.last().unwrap();
+
+        let vdd = self.pvt.voltage.to_f64().unwrap();
+        if abs_diff_eq!(von, 0.0, epsilon = 1e-6) && abs_diff_eq!(vop, vdd, epsilon = 1e-6) {
+            Some(ComparatorDecision::Pos)
+        } else if abs_diff_eq!(von, vdd, epsilon = 1e-6) && abs_diff_eq!(vop, 0.0, epsilon = 1e-6) {
+            Some(ComparatorDecision::Neg)
+        } else {
+            None
+        }
     }
 }
 
@@ -297,7 +325,7 @@ mod tests {
 
     #[test]
     fn sim_strongarm() {
-        let work_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sim_strongarm");
+        let work_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/build/sim_strongarm");
         let tb = StrongArmTranTb {
             dut: StrongArmInstance {
                 tail: MosParams {
@@ -335,8 +363,14 @@ mod tests {
             },
         };
         let ctx = sky130_ctx();
-        let waveforms = ctx
+        let decision = ctx
             .simulate(tb, work_dir)
-            .expect("failed to run simulation");
+            .expect("failed to run simulation")
+            .expect("comparator output did not rail");
+        assert_eq!(
+            decision,
+            ComparatorDecision::Pos,
+            "comparator produced incorrect decision"
+        );
     }
 }
