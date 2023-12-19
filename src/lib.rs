@@ -325,7 +325,7 @@ mod tests {
 
     #[test]
     fn sim_strongarm() {
-        let work_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sim_strongarm");
+        let work_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/build/sim_strongarm");
         let tb = StrongArmTranTb {
             dut: StrongArmInstance {
                 tail: MosParams {
