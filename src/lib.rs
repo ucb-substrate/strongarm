@@ -7,7 +7,7 @@ use sky130pdk::mos::{Nfet01v8, Pfet01v8};
 use sky130pdk::Sky130Pdk;
 use spectre::blocks::{Pulse, Vsource};
 use spectre::tran::Tran;
-use spectre::Spectre;
+use spectre::{ErrPreset, Spectre};
 use substrate::block::Block;
 use substrate::context::{Context, PdkContext};
 use substrate::io::TestbenchIo;
@@ -272,9 +272,9 @@ impl Testbench<Spectre> for StrongArmTranTb {
         sim.simulate(
             opts,
             Tran {
-                stop: dec!(2e-9),
+                stop: dec!(20e-9),
                 start: None,
-                errpreset: None,
+                errpreset: Some(ErrPreset::Conservative),
             },
         )
         .expect("failed to run simulation")
