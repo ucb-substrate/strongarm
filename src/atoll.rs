@@ -2,7 +2,7 @@ use crate::ClockedDiffComparatorIo;
 use atoll::route::GreedyBfsRouter;
 use atoll::{IoBuilder, Tile, TileBuilder};
 use serde::{Deserialize, Serialize};
-use sky130pdk::atoll::{MosLength, NmosTile, PmosTile, Sky130ViaMaker};
+use sky130pdk::atoll::{MosLength, NmosTile, NtapTile, PmosTile, PtapTile, Sky130ViaMaker};
 use sky130pdk::Sky130Pdk;
 use substrate::block::Block;
 use substrate::geometry::align::AlignMode;
@@ -154,6 +154,8 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
     )> {
         let mut ltail =
             cell.generate_primitive(TwoFingerMosTile::nmos(self.half_tail_w, MosLength::L150));
+        let mut ptap = cell.generate_primitive(PtapTile::new(2*ltail.lcm_bounds().width() - 1, 2));
+        let mut ntap = cell.generate_primitive(NtapTile::new(2*ltail.lcm_bounds().width() - 1, 2));
         let mut rtail =
             cell.generate_primitive(TwoFingerMosTile::nmos(self.half_tail_w, MosLength::L150));
         let mut linput =
@@ -177,22 +179,19 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         let mut rprecharge2 =
             cell.generate_primitive(TwoFingerMosTile::pmos(self.precharge_w, MosLength::L150));
 
-        let mut prev = None;
+        let mut prev = ptap.lcm_bounds();
 
         for (l, r) in [
             (&mut ltail, &mut rtail),
             (&mut linput, &mut rinput),
             (&mut linvn, &mut rinvn),
         ] {
-            if let Some(prev) = prev {
-                l.align_rect_mut(prev, AlignMode::Left, 0);
-                l.align_rect_mut(prev, AlignMode::Beneath, 0);
-            }
-
+            l.align_rect_mut(prev, AlignMode::Left, 0);
+            l.align_rect_mut(prev, AlignMode::Beneath, 0);
             r.align_mut(l, AlignMode::Bottom, 0);
             r.align_mut(l, AlignMode::ToTheRight, 0);
 
-            prev = Some(l.lcm_bounds());
+            prev = l.lcm_bounds();
         }
 
         for (l, r) in [
@@ -200,17 +199,23 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
             (&mut lprecharge1, &mut rprecharge1),
             (&mut lprecharge2, &mut rprecharge2),
         ] {
-            l.align_rect_mut(prev.unwrap(), AlignMode::Left, 0);
-            l.align_rect_mut(prev.unwrap(), AlignMode::Beneath, 0);
+            l.align_rect_mut(prev, AlignMode::Left, 0);
+            l.align_rect_mut(prev, AlignMode::Beneath, 0);
             r.align_mut(l, AlignMode::Bottom, 0);
             r.align_mut(l, AlignMode::ToTheRight, 0);
 
-            prev = Some(l.lcm_bounds());
+            prev = l.lcm_bounds();
         }
+
+        ntap.align_rect_mut(prev, AlignMode::Left, 0);
+        ntap.align_rect_mut(prev, AlignMode::Beneath, 0);
 
         let tail = cell.signal("tail", Signal);
         let intn = cell.signal("intn", Signal);
         let intp = cell.signal("intp", Signal);
+
+        cell.connect(ptap.io().vnb, io.schematic.vss);
+        cell.connect(ntap.io().vpb, io.schematic.vdd);
 
         for inst in [&ltail, &rtail] {
             cell.connect(
@@ -319,6 +324,7 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
             }),
         );
 
+        let (_, ptap) = cell.draw(ptap)?;
         let (_, ltail) = cell.draw(ltail)?;
         cell.draw(rtail)?;
         let (_, linput) = cell.draw(linput)?;
@@ -331,6 +337,7 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         cell.draw(rprecharge1)?;
         cell.draw(lprecharge2)?;
         cell.draw(rprecharge2)?;
+        let (_, ntap) = cell.draw(ntap)?;
 
         cell.set_top_layer(2);
         cell.set_router(GreedyBfsRouter);
@@ -343,10 +350,8 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         );
 
         io.layout.clock.set_primary(ltail.io().g.primary);
-        io.layout.vdd.push(linvp.io().b.primary);
-        io.layout.vdd.set_primary(linvp.io().sd0.primary);
-        io.layout.vss.push(ltail.io().b.primary);
-        io.layout.vss.set_primary(ltail.io().sd0.primary);
+        io.layout.vdd.set_primary(ntap.io().vpb.primary);
+        io.layout.vss.set_primary(ptap.io().vnb.primary);
         io.layout.input.p.set_primary(linput.io().g.primary);
         io.layout.input.n.set_primary(rinput.io().g.primary);
         io.layout.output.p.set_primary(linvp.io().g.primary);
