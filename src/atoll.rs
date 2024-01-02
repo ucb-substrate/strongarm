@@ -325,8 +325,10 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         );
 
         io.layout.clock.set_primary(ltail.io().g.primary);
-        io.layout.vdd.set_primary(linvp.io().b.primary);
-        io.layout.vss.set_primary(ltail.io().b.primary);
+        io.layout.vdd.push(linvp.io().b.primary);
+        io.layout.vdd.set_primary(linvp.io().sd0.primary);
+        io.layout.vss.push(ltail.io().b.primary);
+        io.layout.vss.set_primary(ltail.io().sd0.primary);
         io.layout.input.p.set_primary(linput.io().g.primary);
         io.layout.input.n.set_primary(rinput.io().g.primary);
         io.layout.output.p.set_primary(linvp.io().g.primary);
