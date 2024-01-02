@@ -125,7 +125,7 @@ impl Layout<Sky130Pdk> for TwoFingerMosTile {
     }
 }
 
-#[derive(Serialize, Deserialize, Block, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Block, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[substrate(io = "ClockedDiffComparatorIo")]
 pub struct AtollStrongArmInstance {
     pub half_tail_w: i64,
@@ -301,14 +301,14 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
             }),
         );
 
-        cell.draw(ltail)?;
+        let (_, ltail) = cell.draw(ltail)?;
         cell.draw(rtail)?;
-        cell.draw(linput)?;
-        cell.draw(rinput)?;
+        let (_, linput) = cell.draw(linput)?;
+        let (_, rinput) = cell.draw(rinput)?;
         cell.draw(linvn)?;
         cell.draw(rinvn)?;
-        cell.draw(linvp)?;
-        cell.draw(rinvp)?;
+        let (_, linvp) = cell.draw(linvp)?;
+        let (_, rinvp) = cell.draw(rinvp)?;
         cell.draw(lprecharge1)?;
         cell.draw(rprecharge1)?;
         cell.draw(lprecharge2)?;
@@ -324,13 +324,13 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
             Rect::from_sides(-500, -500, -400, -400),
         );
 
-        io.layout.clock.set_primary(tmp.clone());
-        io.layout.vdd.set_primary(tmp.clone());
-        io.layout.vss.set_primary(tmp.clone());
-        io.layout.input.p.set_primary(tmp.clone());
-        io.layout.input.n.set_primary(tmp.clone());
-        io.layout.output.p.set_primary(tmp.clone());
-        io.layout.output.n.set_primary(tmp);
+        io.layout.clock.set_primary(ltail.io().g.primary);
+        io.layout.vdd.set_primary(linvp.io().b.primary);
+        io.layout.vss.set_primary(ltail.io().b.primary);
+        io.layout.input.p.set_primary(linput.io().g.primary);
+        io.layout.input.n.set_primary(rinput.io().g.primary);
+        io.layout.output.p.set_primary(linvp.io().g.primary);
+        io.layout.output.n.set_primary(rinvp.io().g.primary);
 
         Ok(((), ()))
     }

@@ -177,6 +177,10 @@ mod tests {
     use ::atoll::TileWrapper;
     use sky130pdk::atoll::{MosLength, NmosTile, PmosTile};
     use std::path::PathBuf;
+    use sky130pdk::Sky130CommercialSchema;
+    use spice::netlist::NetlistOptions;
+    use spice::Spice;
+    use substrate::schematic::netlist::ConvertibleNetlister;
 
     #[test]
     fn sim_strongarm() {
@@ -231,18 +235,37 @@ mod tests {
 
     #[test]
     fn layout_strongarm() {
-        let work_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/build/layout_strongarm");
-        let gds_path = PathBuf::from(work_dir).join("layout.gds");
+        let work_dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/build/layout_strongarm"));
+        let gds_path = work_dir.join("layout.gds");
+        let netlist_path = work_dir.join("netlist.sp");
         let ctx = sky130_ctx();
 
-        ctx.write_layout(
+        let block =
             TileWrapper::new(AtollStrongArmInstance {
                 half_tail_w: 1_250,
                 input_pair_w: 4_000,
                 inv_nmos_w: 2_000,
                 inv_pmos_w: 1_000,
                 precharge_w: 1_000,
-            }),
+            });
+
+
+        let scir = ctx
+            .export_scir(block)
+            .unwrap()
+            .scir
+            .convert_schema::<Sky130CommercialSchema>()
+            .unwrap()
+            .convert_schema::<Spice>()
+            .unwrap()
+            .build()
+            .unwrap();
+        Spice
+            .write_scir_netlist_to_file(&scir, netlist_path, NetlistOptions::default())
+            .expect("failed to write netlist");
+
+        ctx.write_layout(
+            block,
             gds_path,
         )
         .expect("failed to write layout");
