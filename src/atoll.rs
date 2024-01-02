@@ -283,7 +283,7 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         );
 
         cell.connect(
-            lprecharge2.io(),
+            lprecharge1.io(),
                 Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
                 d: io.schematic.output.n,
                 g: io.schematic.clock,
@@ -292,12 +292,30 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
             }),
         );
         cell.connect(
+            rprecharge1.io(),
+                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
+                d: io.schematic.output.p,
+                g: io.schematic.clock,
+                s: io.schematic.vdd,
+                b: io.schematic.vdd,
+            }),
+        );
+        cell.connect(
+            lprecharge2.io(),
+                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
+                d: intn,
+                g: io.schematic.clock,
+                s: io.schematic.vdd,
+                b: io.schematic.vdd,
+            }),
+        );
+        cell.connect(
             rprecharge2.io(),
                 Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                g: io.schematic.clock,
-                b: io.schematic.vdd,
-                s: io.schematic.vdd,
                 d: intp,
+                g: io.schematic.clock,
+                s: io.schematic.vdd,
+                b: io.schematic.vdd,
             }),
         );
 
