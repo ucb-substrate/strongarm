@@ -169,6 +169,7 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
 
         let mut tail_pair =
             (0..2).map(|_| cell.generate_primitive(half_tail)).collect::<Vec<_>>();
+        // todo: get rid of minus 1
         let mut ptap = cell.generate_primitive(PtapTile::new(2*tail_pair[0].lcm_bounds().width() - 1, 2));
         let mut ntap = cell.generate_primitive(NtapTile::new(2*tail_pair[1].lcm_bounds().width() - 1, 2));
         let strongarm_lcm_hspan =ptap.lcm_bounds().hspan();
@@ -234,12 +235,22 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
 
             cell.connect(
                 inv_nmos_pair[i].io(),
-                TwoFingerMosTileIo::dgsb(
-                    if i == 0 { io.schematic.output.n } else { io.schematic.output.p },
-                    if i == 0 { io.schematic.output.p } else { io.schematic.output.n },
-                    intn,
-                    io.schematic.vss,
-                ),
+                if i == 0 {
+                    TwoFingerMosTileIo::dgsb(
+                        io.schematic.output.n,
+                        io.schematic.output.p,
+                        intn ,
+                        io.schematic.vss,
+                    )
+                } else {
+                    TwoFingerMosTileIo::dgsb(
+                        io.schematic.output.p,
+                        io.schematic.output.n,
+                        intp ,
+                        io.schematic.vss,
+                    )
+
+                }
             );
 
             cell.connect(
