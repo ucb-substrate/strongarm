@@ -18,10 +18,10 @@ use substrate::simulation::{SimController, SimulationContext, Simulator, Testben
 
 use crate::{ClockedDiffComparatorIo, StrongArmInstance};
 
-#[derive(Serialize, Deserialize, Block, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Block, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[substrate(io = "TestbenchIo")]
-pub struct StrongArmTranTb {
-    pub dut: StrongArmInstance,
+pub struct StrongArmTranTb<T> {
+    pub dut: T,
     pub vinp: Decimal,
     pub vinn: Decimal,
     pub pvt: Pvt<Sky130Corner>,
@@ -35,11 +35,15 @@ pub struct StrongArmTranTbNodes {
     vinp: Node,
     clk: Node,
 }
-impl ExportsNestedData for StrongArmTranTb {
+
+trait Dut: Block<Io = ClockedDiffComparatorIo> + Schematic<Sky130Pdk> + Clone {}
+impl<T: Block<Io = ClockedDiffComparatorIo> + Schematic<Sky130Pdk> + Clone> Dut for T {}
+
+impl<T: Dut> ExportsNestedData for StrongArmTranTb<T> {
     type NestedData = StrongArmTranTbNodes;
 }
 
-impl Schematic<Spectre> for StrongArmTranTb {
+impl<T: Dut> Schematic<Spectre> for StrongArmTranTb<T> {
     fn schematic(
         &self,
         io: &<<Self as Block>::Io as HardwareType>::Bundle,
@@ -116,7 +120,7 @@ pub enum ComparatorDecision {
     Pos,
 }
 
-impl SaveTb<Spectre, Tran, ComparatorSim> for StrongArmTranTb {
+impl<T: Dut> SaveTb<Spectre, Tran, ComparatorSim> for StrongArmTranTb<T> {
     fn save_tb(
         ctx: &SimulationContext<Spectre>,
         cell: &Cell<Self>,
@@ -133,7 +137,7 @@ impl SaveTb<Spectre, Tran, ComparatorSim> for StrongArmTranTb {
     }
 }
 
-impl Testbench<Spectre> for StrongArmTranTb {
+impl<T: Dut> Testbench<Spectre> for StrongArmTranTb<T> {
     type Output = Option<ComparatorDecision>;
 
     fn run(&self, sim: SimController<Spectre, Self>) -> Self::Output {
