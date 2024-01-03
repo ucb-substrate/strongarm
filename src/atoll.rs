@@ -6,12 +6,19 @@ use sky130pdk::atoll::{MosLength, NmosTile, NtapTile, PmosTile, PtapTile, Sky130
 use sky130pdk::Sky130Pdk;
 use substrate::block::Block;
 use substrate::geometry::align::AlignMode;
-use substrate::geometry::rect::Rect;
+use substrate::geometry::bbox::Bbox;
 use substrate::io::layout::{Builder, IoShape};
-use substrate::io::schematic::Bundle;
+use substrate::io::schematic::{Bundle, Node};
 use substrate::io::{InOut, Input, Io, MosIo, MosIoSchematic, Signal};
 use substrate::layout::{ExportsLayoutData, Layout};
 use substrate::schematic::{CellBuilder, ExportsNestedData, Schematic};
+use substrate::error::Result;
+use substrate::geometry::dir::Dir;
+use substrate::geometry::point::Point;
+use substrate::geometry::rect::Rect;
+use substrate::geometry::span::Span;
+use substrate::geometry::transform::Translate;
+use substrate::layout::element::Shape;
 
 #[derive(Debug, Default, Clone, Io)]
 pub struct TwoFingerMosTileIo {
@@ -22,19 +29,19 @@ pub struct TwoFingerMosTileIo {
     pub b: InOut<Signal>,
 }
 
-impl From<MosIoSchematic> for TwoFingerMosTileIoSchematic {
-    fn from(value: Bundle<MosIo>) -> Self {
-        Self {
-            sd0: value.s,
-            sd1: value.d,
-            sd2: value.s,
-            g: value.g,
-            b: value.b,
+impl TwoFingerMosTileIo {
+    pub fn dgsb(d: Node, g: Node, s: Node, b: Node) -> Bundle<Self> {
+        Bundle::<Self> {
+            sd0: s,
+            sd1: d,
+            sd2: s,
+            g,
+            b,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Block, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Block, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[substrate(io = "TwoFingerMosTileIo")]
 struct TwoFingerMosTile {
     w: i64,
@@ -152,63 +159,50 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         <Self as ExportsNestedData>::NestedData,
         <Self as ExportsLayoutData>::LayoutData,
     )> {
-        let mut ltail =
-            cell.generate_primitive(TwoFingerMosTile::nmos(self.half_tail_w, MosLength::L150));
-        let mut ptap = cell.generate_primitive(PtapTile::new(2*ltail.lcm_bounds().width() - 1, 2));
-        let mut ntap = cell.generate_primitive(NtapTile::new(2*ltail.lcm_bounds().width() - 1, 2));
-        let mut rtail =
-            cell.generate_primitive(TwoFingerMosTile::nmos(self.half_tail_w, MosLength::L150));
-        let mut linput =
-            cell.generate_primitive(TwoFingerMosTile::nmos(self.input_pair_w, MosLength::L150));
-        let mut rinput =
-            cell.generate_primitive(TwoFingerMosTile::nmos(self.input_pair_w, MosLength::L150));
-        let mut linvn =
-            cell.generate_primitive(TwoFingerMosTile::nmos(self.inv_nmos_w, MosLength::L150));
-        let mut rinvn =
-            cell.generate_primitive(TwoFingerMosTile::nmos(self.inv_nmos_w, MosLength::L150));
-        let mut linvp =
-            cell.generate_primitive(TwoFingerMosTile::pmos(self.inv_pmos_w, MosLength::L150));
-        let mut rinvp =
-            cell.generate_primitive(TwoFingerMosTile::pmos(self.inv_pmos_w, MosLength::L150));
-        let mut lprecharge1 =
-            cell.generate_primitive(TwoFingerMosTile::pmos(self.precharge_w, MosLength::L150));
-        let mut rprecharge1 =
-            cell.generate_primitive(TwoFingerMosTile::pmos(self.precharge_w, MosLength::L150));
-        let mut lprecharge2 =
-            cell.generate_primitive(TwoFingerMosTile::pmos(self.precharge_w, MosLength::L150));
-        let mut rprecharge2 =
-            cell.generate_primitive(TwoFingerMosTile::pmos(self.precharge_w, MosLength::L150));
+        let l = MosLength::L150;
 
-        let mut prev = ptap.lcm_bounds();
+        let half_tail = TwoFingerMosTile::nmos(self.half_tail_w, l);
+        let input_pair = TwoFingerMosTile::nmos(self.input_pair_w, l);
+        let inv_nmos = TwoFingerMosTile::nmos(self.inv_nmos_w, l);
+        let inv_pmos = TwoFingerMosTile::pmos(self.inv_pmos_w, l);
+        let precharge = TwoFingerMosTile::pmos(self.precharge_w, l);
 
-        for (l, r) in [
-            (&mut ltail, &mut rtail),
-            (&mut linput, &mut rinput),
-            (&mut linvn, &mut rinvn),
+        let mut tail_pair =
+            (0..2).map(|_| cell.generate_primitive(half_tail)).collect::<Vec<_>>();
+        let mut ptap = cell.generate_primitive(PtapTile::new(2*tail_pair[0].lcm_bounds().width() - 1, 2));
+        let mut ntap = cell.generate_primitive(NtapTile::new(2*tail_pair[1].lcm_bounds().width() - 1, 2));
+        let strongarm_lcm_hspan =ptap.lcm_bounds().hspan();
+        let mut input_pair =
+            (0..2).map(|_| cell.generate_primitive(input_pair)).collect::<Vec<_>>();
+        let mut inv_nmos_pair =
+            (0..2).map(|_| cell.generate_primitive(inv_nmos)).collect::<Vec<_>>();
+        let mut inv_pmos_pair =
+            (0..2).map(|_| cell.generate_primitive(inv_pmos)).collect::<Vec<_>>();
+        let mut precharges =
+            (0..4).map(|_| cell.generate_primitive(precharge)).collect::<Vec<_>>();
+
+        let mut prev = ntap.lcm_bounds();
+
+        let (precharge_row1, precharge_row2) = precharges.split_at_mut(2);
+
+        for row in [
+            precharge_row1,
+            precharge_row2,
+            &mut inv_pmos_pair,
+            &mut inv_nmos_pair,
+            &mut input_pair,
+            &mut tail_pair,
         ] {
-            l.align_rect_mut(prev, AlignMode::Left, 0);
-            l.align_rect_mut(prev, AlignMode::Beneath, 0);
-            r.align_mut(l, AlignMode::Bottom, 0);
-            r.align_mut(l, AlignMode::ToTheRight, 0);
+            row[0].align_rect_mut(prev, AlignMode::Left, 0);
+            row[0].align_rect_mut(prev, AlignMode::Beneath, 0);
+            prev = row[0].lcm_bounds();
+            row[1].align_rect_mut(prev, AlignMode::Bottom, 0);
+            row[1].align_rect_mut(prev, AlignMode::ToTheRight, 0);
 
-            prev = l.lcm_bounds();
         }
 
-        for (l, r) in [
-            (&mut linvp, &mut rinvp),
-            (&mut lprecharge1, &mut rprecharge1),
-            (&mut lprecharge2, &mut rprecharge2),
-        ] {
-            l.align_rect_mut(prev, AlignMode::Left, 0);
-            l.align_rect_mut(prev, AlignMode::Beneath, 0);
-            r.align_mut(l, AlignMode::Bottom, 0);
-            r.align_mut(l, AlignMode::ToTheRight, 0);
-
-            prev = l.lcm_bounds();
-        }
-
-        ntap.align_rect_mut(prev, AlignMode::Left, 0);
-        ntap.align_rect_mut(prev, AlignMode::Beneath, 0);
+        ptap.align_rect_mut(prev, AlignMode::Left, 0);
+        ptap.align_rect_mut(prev, AlignMode::Beneath, 0);
 
         let tail = cell.signal("tail", Signal);
         let intn = cell.signal("intn", Signal);
@@ -217,145 +211,106 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         cell.connect(ptap.io().vnb, io.schematic.vss);
         cell.connect(ntap.io().vpb, io.schematic.vdd);
 
-        for inst in [&ltail, &rtail] {
+        for i in 0..2 {
             cell.connect(
-                inst.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                    d: tail,
-                    g: io.schematic.clock,
-                    s: io.schematic.vss,
-                    b: io.schematic.vss,
-                }),
+                tail_pair[i].io(),
+                TwoFingerMosTileIo::dgsb(
+                    tail,
+                    io.schematic.clock,
+                    io.schematic.vss,
+                    io.schematic.vss,
+                ),
             );
+
+            cell.connect(
+                input_pair[i].io(),
+                TwoFingerMosTileIo::dgsb(
+                     intn,
+                     if i == 0 { io.schematic.input.p } else { io.schematic.input.n },
+                     tail,
+                     io.schematic.vss,
+                ),
+            );
+
+            cell.connect(
+                inv_nmos_pair[i].io(),
+                TwoFingerMosTileIo::dgsb(
+                    if i == 0 { io.schematic.output.n } else { io.schematic.output.p },
+                    if i == 0 { io.schematic.output.p } else { io.schematic.output.n },
+                    intn,
+                    io.schematic.vss,
+                ),
+            );
+
+            cell.connect(
+                inv_pmos_pair[i].io(),
+                TwoFingerMosTileIo::dgsb(
+                     if i == 0 { io.schematic.output.n } else { io.schematic.output.p },
+                     if i == 0 { io.schematic.output.p } else { io.schematic.output.n },
+                     io.schematic.vdd,
+                     io.schematic.vdd,
+                ),
+            );
+
+            for j in 0..2 {
+                cell.connect(
+                    precharges[2*i + j].io(),
+                    TwoFingerMosTileIo::dgsb(
+                        match (i, j) {
+                            (0, 0) => io.schematic.output.n,
+                            (0, 1) => io.schematic.output.p,
+                            (1, 0) => intn,
+                            (1, 1) => intp,
+                            _ => unreachable!(),
+                        },
+                        io.schematic.clock,
+                        io.schematic.vdd,
+                        io.schematic.vdd,
+                    ),
+                );
+            }
         }
 
-        cell.connect(
-            linput.io(),
-            Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: intn,
-                g: io.schematic.input.p,
-                s: tail,
-                b: io.schematic.vss,
-            }),
-        );
-        cell.connect(
-            rinput.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: intp,
-                g: io.schematic.input.n,
-                s: tail,
-                b: io.schematic.vss,
-            }),
-        );
-
-        cell.connect(
-            linvn.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: io.schematic.output.n,
-                g: io.schematic.output.p,
-                s: intn,
-                b: io.schematic.vss,
-            }),
-        );
-
-        cell.connect(
-            rinvn.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: io.schematic.output.p,
-                g: io.schematic.output.n,
-                s: intp,
-                b: io.schematic.vss,
-            }),
-        );
-
-        cell.connect(
-            linvp.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: io.schematic.output.n,
-                g: io.schematic.output.p,
-                s: io.schematic.vdd,
-                b: io.schematic.vdd,
-            }),
-        );
-        cell.connect(
-            rinvp.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: io.schematic.output.p,
-                g: io.schematic.output.n,
-                s: io.schematic.vdd,
-                b: io.schematic.vdd,
-            }),
-        );
-
-        cell.connect(
-            lprecharge1.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: io.schematic.output.n,
-                g: io.schematic.clock,
-                s: io.schematic.vdd,
-                b: io.schematic.vdd,
-            }),
-        );
-        cell.connect(
-            rprecharge1.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: io.schematic.output.p,
-                g: io.schematic.clock,
-                s: io.schematic.vdd,
-                b: io.schematic.vdd,
-            }),
-        );
-        cell.connect(
-            lprecharge2.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: intn,
-                g: io.schematic.clock,
-                s: io.schematic.vdd,
-                b: io.schematic.vdd,
-            }),
-        );
-        cell.connect(
-            rprecharge2.io(),
-                Bundle::<TwoFingerMosTileIo>::from(Bundle::<MosIo> {
-                d: intp,
-                g: io.schematic.clock,
-                s: io.schematic.vdd,
-                b: io.schematic.vdd,
-            }),
-        );
-
-        let (_, ptap) = cell.draw(ptap)?;
-        let (_, ltail) = cell.draw(ltail)?;
-        cell.draw(rtail)?;
-        let (_, linput) = cell.draw(linput)?;
-        let (_, rinput) = cell.draw(rinput)?;
-        cell.draw(linvn)?;
-        cell.draw(rinvn)?;
-        let (_, linvp) = cell.draw(linvp)?;
-        let (_, rinvp) = cell.draw(rinvp)?;
-        cell.draw(lprecharge1)?;
-        cell.draw(rprecharge1)?;
-        cell.draw(lprecharge2)?;
-        cell.draw(rprecharge2)?;
-        let (_, ntap) = cell.draw(ntap)?;
+        let ptap = cell.draw(ptap)?;
+        let ntap = cell.draw(ntap)?;
+        let tail_pair = tail_pair.into_iter().map(|inst| cell.draw(inst)).collect::<Result<Vec<_>>>()?;
+        let input_pair= input_pair.into_iter().map(|inst| cell.draw(inst)).collect::<Result<Vec<_>>>()?;
+        let _inv_nmos_pair = inv_nmos_pair.into_iter().map(|inst| cell.draw(inst)).collect::<Result<Vec<_>>>()?;
+        let inv_pmos_pair = inv_pmos_pair.into_iter().map(|inst| cell.draw(inst)).collect::<Result<Vec<_>>>()?;
+        let _precharges = precharges.into_iter().map(|inst| cell.draw(inst)).collect::<Result<Vec<_>>>()?;
 
         cell.set_top_layer(2);
         cell.set_router(GreedyBfsRouter);
         cell.set_via_maker(Sky130ViaMaker);
 
-        // todo: add correct port geometry
-        let tmp = IoShape::with_layers(
-            cell.ctx().layers.li1,
-            Rect::from_sides(-500, -500, -400, -400),
-        );
+        io.layout.vdd.set_primary(ntap.layout.io().vpb.primary);
+        io.layout.vss.set_primary(ptap.layout.io().vnb.primary);
 
-        io.layout.clock.set_primary(ltail.io().g.primary);
-        io.layout.vdd.set_primary(ntap.io().vpb.primary);
-        io.layout.vss.set_primary(ptap.io().vnb.primary);
-        io.layout.input.p.set_primary(linput.io().g.primary);
-        io.layout.input.n.set_primary(rinput.io().g.primary);
-        io.layout.output.p.set_primary(linvp.io().g.primary);
-        io.layout.output.n.set_primary(rinvp.io().g.primary);
+        let m1slice = cell.layer_stack.slice(0..2);
+
+        let mut lcm_tracks = Vec::new();
+        lcm_tracks.push(m1slice.shrink_to_lcm_units(tail_pair[0].layout.io().g.primary.bbox().unwrap()).unwrap().bot());
+        for io in [input_pair[0].layout.io(), inv_pmos_pair[0].layout.io()] {
+            let bot_track = m1slice.expand_to_lcm_units(io.g.primary.bbox().unwrap()).bot();
+            lcm_tracks.push(bot_track);
+            lcm_tracks.push(bot_track+1);
+        }
+
+        for (i, port) in [io.schematic.clock, io.schematic.input.p, io.schematic.input.n, io.schematic.output.p, io.schematic.output.n].into_iter().enumerate() {
+            cell.assign_grid_points(port, 1, Rect::from_spans(strongarm_lcm_hspan, Span::from_point(lcm_tracks[i])));
+        }
+
+        let m1slice = cell.layer_stack.slice(0..2);
+
+        let io_rects = lcm_tracks.into_iter().map(
+            |track| {
+                m1slice.lcm_to_physical_rect(Rect::from_spans(strongarm_lcm_hspan, Span::from_point(track))).expand_dir(Dir::Vert, 130).translate(Point::new(0, 130))
+            }
+        ).collect::<Vec<_>>();
+
+        for (i, port) in [&mut io.layout.clock, &mut io.layout.input.p, &mut io.layout.input.n, &mut io.layout.output.p, &mut io.layout.output.n].into_iter().enumerate() {
+            port.set_primary(IoShape::with_layers(cell.ctx().layers.met1, io_rects[i]));
+        }
 
         Ok(((), ()))
     }
