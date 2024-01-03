@@ -147,7 +147,7 @@ impl<T: Dut> Testbench<Spectre> for StrongArmTranTb<T> {
             .simulate(
                 opts,
                 Tran {
-                    stop: dec!(20e-9),
+                    stop: dec!(30e-9),
                     start: None,
                     errpreset: Some(ErrPreset::Conservative),
                 },
