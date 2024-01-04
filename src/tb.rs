@@ -77,7 +77,7 @@ impl<T: Dut> Schematic<Spectre> for StrongArmTranTb<T> {
             Bundle::<ClockedDiffComparatorIo> {
                 input: Bundle::<DiffPair> {
                     p: *vinp.io().p,
-                    n: *vinn.io().n,
+                    n: *vinn.io().p,
                 },
                 output: output.clone(),
                 clock: *vclk.io().p,
