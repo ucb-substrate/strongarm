@@ -16,7 +16,7 @@ use substrate::schematic::{Cell, CellBuilder, ExportsNestedData, NestedData, Sch
 use substrate::simulation::data::{tran, FromSaved, Save, SaveTb};
 use substrate::simulation::{SimController, SimulationContext, Simulator, Testbench};
 
-use crate::{ClockedDiffComparatorIo, StrongArmInstance};
+use crate::ClockedDiffComparatorIo;
 
 #[derive(Serialize, Deserialize, Block, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[substrate(io = "TestbenchIo")]

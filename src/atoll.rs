@@ -1,5 +1,5 @@
 use crate::ClockedDiffComparatorIo;
-use atoll::route::GreedyBfsRouter;
+use atoll::route::GreedyRouter;
 use atoll::{IoBuilder, Tile, TileBuilder};
 use serde::{Deserialize, Serialize};
 use sky130pdk::atoll::{MosLength, NmosTile, NtapTile, PmosTile, PtapTile, Sky130ViaMaker};
@@ -15,7 +15,7 @@ use substrate::geometry::span::Span;
 use substrate::geometry::transform::Translate;
 use substrate::io::layout::{Builder, IoShape};
 use substrate::io::schematic::{Bundle, Node};
-use substrate::io::{InOut, Input, Io, MosIo, MosIoSchematic, Signal};
+use substrate::io::{InOut, Input, Io, Signal};
 use substrate::layout::element::Shape;
 use substrate::layout::{ExportsLayoutData, Layout};
 use substrate::schematic::{CellBuilder, ExportsNestedData, Schematic};
@@ -192,7 +192,7 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         // todo: get rid of minus 1
         let mut ptap =
             cell.generate_primitive(PtapTile::new(2 * tail_pair[0].lcm_bounds().width() - 1, 2));
-        let mut ntap =
+        let ntap =
             cell.generate_primitive(NtapTile::new(2 * tail_pair[1].lcm_bounds().width() - 1, 2));
         cell.connect(ptap.io().vnb, io.schematic.vss);
         cell.connect(ntap.io().vpb, io.schematic.vdd);
@@ -338,7 +338,7 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
             .collect::<Result<Vec<_>>>()?;
 
         cell.set_top_layer(2);
-        cell.set_router(GreedyBfsRouter);
+        cell.set_router(GreedyRouter);
         cell.set_via_maker(Sky130ViaMaker);
 
         io.layout.vdd.set_primary(ntap.layout.io().vpb.primary);
@@ -403,6 +403,8 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
         .into_iter()
         .enumerate()
         {
+            cell.layout
+                .draw(Shape::new(cell.ctx().layers.met1, io_rects[i]))?;
             port.set_primary(IoShape::with_layers(cell.ctx().layers.met1, io_rects[i]));
         }
 

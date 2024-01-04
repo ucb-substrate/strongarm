@@ -1,9 +1,4 @@
-use approx::abs_diff_eq;
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal::Decimal;
-use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
-use sky130pdk::corner::Sky130Corner;
 use sky130pdk::mos::MosParams;
 use sky130pdk::mos::{Nfet01v8, Pfet01v8};
 use sky130pdk::Sky130Pdk;
@@ -12,9 +7,7 @@ use substrate::block::Block;
 use substrate::context::{Context, PdkContext};
 use substrate::io::schematic::HardwareType;
 use substrate::io::{DiffPair, InOut, Input, Io, MosIoSchematic, Output, Signal};
-use substrate::pdk::corner::Pvt;
-use substrate::schematic::{CellBuilder, ExportsNestedData, NestedData, Schematic};
-use substrate::simulation::{Simulator, Testbench};
+use substrate::schematic::{CellBuilder, ExportsNestedData, Schematic};
 
 pub mod atoll;
 pub mod tb;
@@ -175,11 +168,14 @@ mod tests {
     use crate::atoll::AtollStrongArmInstance;
     use crate::tb::{ComparatorDecision, StrongArmTranTb};
     use ::atoll::TileWrapper;
-    use sky130pdk::atoll::{MosLength, NmosTile, PmosTile};
+    use rust_decimal::Decimal;
+    use rust_decimal_macros::dec;
+    use sky130pdk::corner::Sky130Corner;
     use sky130pdk::Sky130CommercialSchema;
     use spice::netlist::NetlistOptions;
     use spice::Spice;
     use std::path::PathBuf;
+    use substrate::pdk::corner::Pvt;
     use substrate::schematic::netlist::ConvertibleNetlister;
 
     #[test]
