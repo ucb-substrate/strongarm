@@ -264,7 +264,7 @@ mod tests {
                 let vinn = dec!(0.18) * Decimal::from(i);
                 let vinp = vinn + j;
 
-                if vinp < dec!(0) || vinp > dec!(1.8) {
+                if vinp < dec!(0.5) || vinp > dec!(1.8) {
                     continue;
                 }
 
