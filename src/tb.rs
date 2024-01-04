@@ -158,9 +158,9 @@ impl<T: Dut> Testbench<Spectre> for StrongArmTranTb<T> {
         let vop = *wav.vop.last().unwrap();
 
         let vdd = self.pvt.voltage.to_f64().unwrap();
-        if abs_diff_eq!(von, 0.0, epsilon = 1e-6) && abs_diff_eq!(vop, vdd, epsilon = 1e-6) {
+        if abs_diff_eq!(von, 0.0, epsilon = 1e-4) && abs_diff_eq!(vop, vdd, epsilon = 1e-4) {
             Some(ComparatorDecision::Pos)
-        } else if abs_diff_eq!(von, vdd, epsilon = 1e-6) && abs_diff_eq!(vop, 0.0, epsilon = 1e-6) {
+        } else if abs_diff_eq!(von, vdd, epsilon = 1e-4) && abs_diff_eq!(vop, 0.0, epsilon = 1e-4) {
             Some(ComparatorDecision::Neg)
         } else {
             None
