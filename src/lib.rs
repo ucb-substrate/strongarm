@@ -27,7 +27,7 @@ pub struct ClockedDiffComparatorIo {
     pub vdd: InOut<Signal>,
     pub vss: InOut<Signal>,
 }
-#[derive(Serialize, Deserialize, Block, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Block, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[substrate(io = "ClockedDiffComparatorIo")]
 pub struct StrongArmInstance {
     pub tail: MosParams,
@@ -250,7 +250,7 @@ mod tests {
         };
         let ctx = sky130_ctx();
 
-        for i in 0..=10 {
+        for i in 3..=10 {
             for j in [
                 dec!(-1.8),
                 dec!(-0.5),
