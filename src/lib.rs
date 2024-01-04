@@ -185,52 +185,79 @@ mod tests {
     #[test]
     fn sim_strongarm() {
         let work_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/build/sim_strongarm");
-        let tb = StrongArmTranTb {
-            dut: StrongArmInstance {
-                tail: MosParams {
-                    w: 5_000,
-                    l: 150,
-                    nf: 1,
-                },
-                input_pair: MosParams {
-                    w: 8_000,
-                    l: 150,
-                    nf: 1,
-                },
-                inv_nmos: MosParams {
-                    w: 4_000,
-                    l: 150,
-                    nf: 1,
-                },
-                inv_pmos: MosParams {
-                    w: 2_000,
-                    l: 150,
-                    nf: 1,
-                },
-                precharge: MosParams {
-                    w: 2_000,
-                    l: 150,
-                    nf: 1,
-                },
+        let dut = StrongArmInstance {
+            tail: MosParams {
+                w: 5_000,
+                l: 150,
+                nf: 1,
             },
-            vinp: dec!(0.8),
-            vinn: dec!(0.6),
-            pvt: Pvt {
-                corner: Sky130Corner::Tt,
-                voltage: dec!(1.8),
-                temp: dec!(25.0),
+            input_pair: MosParams {
+                w: 8_000,
+                l: 150,
+                nf: 1,
+            },
+            inv_nmos: MosParams {
+                w: 4_000,
+                l: 150,
+                nf: 1,
+            },
+            inv_pmos: MosParams {
+                w: 2_000,
+                l: 150,
+                nf: 1,
+            },
+            precharge: MosParams {
+                w: 2_000,
+                l: 150,
+                nf: 1,
             },
         };
+        let pvt = Pvt {
+            corner: Sky130Corner::Tt,
+            voltage: dec!(1.8),
+            temp: dec!(25.0),
+        };
         let ctx = sky130_ctx();
-        let decision = ctx
-            .simulate(tb, work_dir)
-            .expect("failed to run simulation")
-            .expect("comparator output did not rail");
-        assert_eq!(
-            decision,
-            ComparatorDecision::Pos,
-            "comparator produced incorrect decision"
-        );
+
+        for i in 3..=10 {
+            for j in [
+                dec!(-1.8),
+                dec!(-0.5),
+                dec!(-0.1),
+                dec!(-0.05),
+                dec!(0.05),
+                dec!(0.1),
+                dec!(0.5),
+                dec!(1.8),
+            ] {
+                let vinn = dec!(0.18) * Decimal::from(i);
+                let vinp = vinn + j;
+
+                if vinp < dec!(0.5) || vinp > dec!(1.8) {
+                    continue;
+                }
+
+                let tb = StrongArmTranTb {
+                    dut,
+                    vinp,
+                    vinn,
+                    pvt,
+                };
+                let decision = ctx
+                    .simulate(tb, work_dir)
+                    .expect("failed to run simulation")
+                    .expect("comparator output did not rail");
+                assert_eq!(
+                    decision,
+                    if j > dec!(0) {
+                        ComparatorDecision::Pos
+                    } else {
+                        ComparatorDecision::Neg
+                    },
+                    "comparator produced incorrect decision"
+                );
+            }
+        }
     }
 
     #[test]
