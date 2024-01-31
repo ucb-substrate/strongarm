@@ -389,7 +389,6 @@ impl Tile<Sky130Pdk> for AtollStrongArmInstance {
                         Span::from_point(track),
                     ))
                     .expand_dir(Dir::Vert, 130)
-                    .translate(Point::new(0, 130))
             })
             .collect::<Vec<_>>();
 
